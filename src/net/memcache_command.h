@@ -44,7 +44,6 @@ class MemcacheCommand
   void setSourceAddress(const void * src);
   void setCommandName(const std::string &name);
 
-  bool parseRequest(u_char *data, int dataLength);
   bool parseResponse(u_char *data, int dataLength);
 
   memcache_command_t cmd_type;

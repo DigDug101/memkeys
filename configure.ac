@@ -40,7 +40,6 @@ esac
     
 # Check for headers
 AC_CHECK_HEADERS([getopt.h])
-AC_CHECK_HEADERS([pcrecpp.h])
 AC_CHECK_HEADERS([cstdatomic])
 AC_CHECK_HEADERS([atomic])
 
@@ -49,17 +48,6 @@ AC_CHECK_LIB([pthread], [pthread_create])
 AC_CHECK_LIB([getopt],[getopt_long])
 AC_CHECK_LIB([gnugetopt],[getopt_long])
 
-PCRECPP=""
-AC_ARG_WITH([libpcrecpp],
-            AS_HELP_STRING([--with-libpcrecpp=DIR], [libpcre base directory]),
-            [with_libpcrecpp="$withval"],
-            [with_libpcrecpp="no"])
-if test "x$with_libpcrecpp" != "xno"; then
-  LDFLAGS="${LDFLAGS} -L${with_libpcrecpp}/lib"
-  CPPFLAGS="${CPPFLAGS} -I${with_libpcrecpp}/include"
-fi
-# Fail if pcrecpp is not found
-AC_CHECK_LIB([pcrecpp], [main],, [AC_MSG_ERROR([libpcrecpp not found but required])])
 
 AC_ARG_WITH(libpcap_includes,
             AS_HELP_STRING([--with-libpcap-includes=DIR], [libpcap include directory]),

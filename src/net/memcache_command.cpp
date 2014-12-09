@@ -1,7 +1,6 @@
 #include <iostream>
 #include <iomanip>
 #include <string>
-#include <pcrecpp.h>
 
 #include "net/net.h"
 
@@ -11,6 +10,28 @@ extern "C" {
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 #include <netinet/if_ether.h>
+
+// from memcached's protocol_binary.h
+typedef union {
+  struct {
+    uint8_t magic;
+    uint8_t opcode;
+    uint16_t keylen;
+    uint8_t extlen;
+    uint8_t datatype;
+    uint16_t status;
+    uint32_t bodylen;
+    uint32_t opaque;
+    uint64_t cas;
+  } response;
+  uint8_t bytes[24];
+} protocol_binary_response_header;
+
+typedef enum {
+  PROTOCOL_BINARY_CMD_GETK = 0x0c,
+  PROTOCOL_BINARY_CMD_GETKQ = 0x0d
+} protocol_binary_command;
+
 }
 
 namespace mckeys {
@@ -66,41 +87,47 @@ MemcacheCommand::MemcacheCommand(const Packet& _packet,
     dataLength = pkthdr->caplen;
   }
 
-  if (possible_request && parseRequest(data, dataLength)) {
-    cmd_type = MC_REQUEST;
-  } else if (!possible_request && parseResponse(data, dataLength)) {
+  if (!possible_request && parseResponse(data, dataLength)) {
     cmd_type = MC_RESPONSE;
   }
 }
 
 // protected
-bool MemcacheCommand::parseRequest(u_char*, int)
-{
-  // don't care about requests right now
-  return false;
-}
-
 bool MemcacheCommand::parseResponse(u_char *data, int length)
 {
-  static pcrecpp::RE re("VALUE (\\S+) \\d+ (\\d+)",
-                        pcrecpp::RE_Options(PCRE_MULTILINE));
-  bool found_response = false;
-  string key;
-  int size = -1;
-  string input = "";
-  for (int i = 0; i < length; i++) {
-    int cid = (int)data[i];
-    if (isprint(cid) || cid == 10 || cid == 13) {
-      input += (char)data[i];
-    }
+  static ssize_t hdr_size = sizeof(protocol_binary_response_header);
+
+  const protocol_binary_response_header* header;
+  uint32_t keyLength;
+  uint32_t extrasLength;
+
+  // we must at least have a full header
+  if (length < hdr_size) {
+    return false;
   }
-  re.PartialMatch(input, &key, &size);
-  if (size >= 0) {
-    objectSize = size;
-    objectKey = key;
-    found_response = true;
+
+  header = reinterpret_cast<const protocol_binary_response_header*>(data);
+
+  if (header->response.magic != 0x81) {
+    return false;
   }
-  return found_response;
+
+  if (header->response.opcode != PROTOCOL_BINARY_CMD_GETK &&
+      header->response.opcode != PROTOCOL_BINARY_CMD_GETKQ) {
+    return false;
+  }
+
+  keyLength = ntohs(header->response.keylen);
+  extrasLength = header->response.extlen;
+
+  if (length < hdr_size + extrasLength + keyLength) {
+    return false;
+  }
+
+  this->objectSize = ntohl(header->response.bodylen) - keyLength - extrasLength;
+  this->objectKey = std::string(reinterpret_cast<const char*>(data + hdr_size + extrasLength), keyLength);
+
+  return true;
 }
 
 void MemcacheCommand::setSourceAddress(const void * src)
