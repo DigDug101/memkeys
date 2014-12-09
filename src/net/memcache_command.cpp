@@ -25,7 +25,6 @@ MemcacheCommand::MemcacheCommand(const Packet& _packet,
 {
   static ssize_t ether_header_sz = sizeof(struct ether_header);
   static ssize_t ip_sz = sizeof(struct ip);
-  static ssize_t tcphdr_sz = sizeof(struct tcphdr);
 
   const struct ether_header* ethernetHeader;
   const struct ip* ipHeader;
@@ -37,6 +36,7 @@ MemcacheCommand::MemcacheCommand(const Packet& _packet,
   bool possible_request = false;
   u_char *data;
   uint32_t dataLength = 0;
+  uint32_t dataOffset;
 
   // must be an IP packet
   ethernetHeader = (struct ether_header*)packet;
@@ -59,9 +59,9 @@ MemcacheCommand::MemcacheCommand(const Packet& _packet,
   }
 
   tcpHeader = (struct tcphdr*)(packet + ether_header_sz + ip_sz);
-  (void)tcpHeader;
-  data = (u_char*)(packet + ether_header_sz + ip_sz + tcphdr_sz);
-  dataLength = pkthdr->len - (ether_header_sz + ip_sz + tcphdr_sz);
+  dataOffset = ether_header_sz + ip_sz + (tcpHeader->doff * 4);
+  data = (u_char*)(packet + dataOffset);
+  dataLength = pkthdr->len - dataOffset;
   if (dataLength > pkthdr->caplen) {
     dataLength = pkthdr->caplen;
   }
